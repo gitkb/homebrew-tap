@@ -1,0 +1,130 @@
+name: Update GitKB Formula
+
+on:
+  repository_dispatch:
+    types: [gitkb-formula-update]
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Formula channel to update
+        required: true
+        type: choice
+        options:
+          - stable
+          - alpha
+      tag:
+        description: GitKB release tag, for example v0.1.56-alpha.123.abcdef0
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    name: Update formula
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract update info
+        id: info
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            CHANNEL="${{ github.event.client_payload.channel }}"
+            TAG="${{ github.event.client_payload.tag }}"
+          else
+            CHANNEL="${{ github.event.inputs.channel }}"
+            TAG="${{ github.event.inputs.tag }}"
+          fi
+
+          case "$CHANNEL" in
+            stable|alpha) ;;
+            *)
+              echo "::error::Unsupported channel: $CHANNEL"
+              exit 1
+              ;;
+          esac
+
+          if [ -z "$TAG" ]; then
+            echo "::error::Missing tag"
+            exit 1
+          fi
+
+          VERSION="${TAG#v}"
+          BRANCH="update-gitkb-${CHANNEL}-${VERSION}"
+          if [ "$CHANNEL" = "stable" ]; then
+            FORMULA="Formula/gitkb.rb"
+            TITLE="Update gitkb to v${VERSION}"
+            COMMIT="Update gitkb to v${VERSION}"
+          else
+            FORMULA="Formula/gitkb-alpha.rb"
+            TITLE="Update gitkb-alpha to v${VERSION}"
+            COMMIT="Update gitkb-alpha to v${VERSION}"
+          fi
+
+          {
+            echo "channel=$CHANNEL"
+            echo "tag=$TAG"
+            echo "version=$VERSION"
+            echo "branch=$BRANCH"
+            echo "formula=$FORMULA"
+            echo "title=$TITLE"
+            echo "commit=$COMMIT"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Download release checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p checksums
+          gh release download "${{ steps.info.outputs.tag }}" \
+            --repo gitkb/gitkb-releases \
+            --pattern "*.sha256" \
+            --dir checksums
+
+      - name: Update formula
+        env:
+          CHANNEL: ${{ steps.info.outputs.channel }}
+          VERSION: ${{ steps.info.outputs.version }}
+          CHECKSUM_DIR: checksums
+        run: scripts/update-gitkb-formula.sh
+
+      - name: Open update PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          BRANCH="${{ steps.info.outputs.branch }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git checkout -B "$BRANCH"
+          git add "${{ steps.info.outputs.formula }}"
+
+          if git diff --cached --quiet; then
+            echo "Formula unchanged; skipping PR."
+            exit 0
+          fi
+
+          git commit -m "${{ steps.info.outputs.commit }}"
+          git push -f -u origin "$BRANCH"
+
+          if ! gh pr view "$BRANCH" --repo gitkb/homebrew-tap &>/dev/null; then
+            gh pr create \
+              --title "${{ steps.info.outputs.title }}" \
+              --body "Automated formula update from gitkb-releases ${{ steps.info.outputs.tag }}." \
+              --base main \
+              --head "$BRANCH" \
+              --repo gitkb/homebrew-tap
+          fi
+
+          gh pr merge "$BRANCH" \
+            --auto \
+            --squash \
+            --repo gitkb/homebrew-tap || echo "Auto-merge setup failed (may require approvals)"
