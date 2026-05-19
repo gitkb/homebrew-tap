@@ -10,22 +10,22 @@ class MetaCli < Formula
   on_macos do
     on_arm do
       url "https://github.com/gitkb/meta/releases/download/v#{version}/meta-darwin-arm64.tar.gz"
-      sha256 "a68a0195ba12020e0d5bb70963eb832f30dd04fcaffe24443cddbb1c59383bcf"
+      sha256 "700bf88e0958a6e7720cb7bf0088ff460adc486044c2840eb3203bfaa2088823"
     end
     on_intel do
       url "https://github.com/gitkb/meta/releases/download/v#{version}/meta-darwin-x64.tar.gz"
-      sha256 "ca350f4017c52820870c250a06d4746a13861d4771d9a50264062d04d9a5d15f"
+      sha256 "bd393086a3b8e0f55e86c826fc9de0ebc53ba18d4e21868a594cc5e6e35a5974"
     end
   end
 
   on_linux do
     on_arm do
       url "https://github.com/gitkb/meta/releases/download/v#{version}/meta-linux-arm64.tar.gz"
-      sha256 "a6e63375083964c422c9c7740117fb264678a74d069236d5882d83d26fcb634e"
+      sha256 "a56adb1672a165daf87ffaa1862702261ad04d23875a4ad4a3f21627d218da89"
     end
     on_intel do
       url "https://github.com/gitkb/meta/releases/download/v#{version}/meta-linux-x64.tar.gz"
-      sha256 "55102f18702aa8e0d43edb220e7e9c4d2c490ee0f4d9a858627d9ee242fb83fe"
+      sha256 "08f9db0f0bc4a9d931fa69177298e1ce25982cbcc4e43bebebc1dedd4dfbd2a7"
     end
   end
 
