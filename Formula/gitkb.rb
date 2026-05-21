@@ -4,28 +4,28 @@
 class Gitkb < Formula
   desc "Git-native knowledge base with AI-powered code intelligence"
   homepage "https://github.com/gitkb/gitkb-releases"
-  version "0.2.7"
+  version "0.2.8"
   license "MIT"
 
   on_macos do
     on_arm do
       url "https://github.com/gitkb/gitkb-releases/releases/download/v#{version}/gitkb-darwin-arm64.tar.gz"
-      sha256 "66c3d2719bfbc99f40b8ed85c62a7f15ee7b206c9c456dc108ca6feca21b3cf7"
+      sha256 "b23581173f43014c62c05e7a9d47ea6e2791ef3cf373e29b572911bfbd4adfde"
     end
     on_intel do
       url "https://github.com/gitkb/gitkb-releases/releases/download/v#{version}/gitkb-darwin-x64.tar.gz"
-      sha256 "188f6fd7b4ec2342f96179e163166bab22fe7737b74e5bf667cf610f77effaa0"
+      sha256 "d445009ef3df0dee37a62bc15b53610e609b54c92a757c7377556afb626562f7"
     end
   end
 
   on_linux do
     on_arm do
       url "https://github.com/gitkb/gitkb-releases/releases/download/v#{version}/gitkb-linux-arm64.tar.gz"
-      sha256 "75b32f0a5a31fa293744ca39e42e2a98a6926afedb4a71b000cb1e344521582e"
+      sha256 "a19de651ddecf4c5ccafc088b8b898c124e553a0684a5d50d41d59686fbf6619"
     end
     on_intel do
       url "https://github.com/gitkb/gitkb-releases/releases/download/v#{version}/gitkb-linux-x64.tar.gz"
-      sha256 "64cd516f0800fada188e0cb62803b3b7ef14df9d0c80236ee4bbee8a030dfb47"
+      sha256 "82cf14c3cd7b0273fc7b07d72dc5ebcd0a0b747e9e9f7e05c0b2db8a4a7071e4"
     end
   end
 
