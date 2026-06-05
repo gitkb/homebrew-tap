@@ -1,28 +1,28 @@
 class Atc < Formula
   desc "Air Traffic Control — agent orchestrator for AI coding agents"
   homepage "https://github.com/gitkb/atc"
-  version "0.1.7"
+  version "0.1.8"
   license "MIT"
 
   on_macos do
     on_arm do
-      url "https://github.com/gitkb/atc/releases/download/v0.1.7/atc-darwin-arm64.tar.gz"
-      sha256 "eed531aa44d292d39c4ae894815fca41e5d40ae53a9d9ae83486d6714b768316"
+      url "https://github.com/gitkb/atc/releases/download/v0.1.8/atc-darwin-arm64.tar.gz"
+      sha256 "842b9fefbfa674244e3b82b8d22003097fa24d85d2ba67253eded49607c9f270"
     end
     on_intel do
-      url "https://github.com/gitkb/atc/releases/download/v0.1.7/atc-darwin-x64.tar.gz"
-      sha256 "53488e32a59a8b370069fc4f84656c4d9efe02939c1e275de1ea4bdb201d986c"
+      url "https://github.com/gitkb/atc/releases/download/v0.1.8/atc-darwin-x64.tar.gz"
+      sha256 "f96c95996a876e624ec4cb644926f3288b9946e0f28d3067c2d84602387989e8"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/gitkb/atc/releases/download/v0.1.7/atc-linux-arm64.tar.gz"
-      sha256 "018bfdc2ce52cbfa85b7d6d3593bc8c2cdf9eb7d3f153421303fef955d6b3e1d"
+      url "https://github.com/gitkb/atc/releases/download/v0.1.8/atc-linux-arm64.tar.gz"
+      sha256 "c916f47b89bc1100b29cdd329b09f571be0fae427bf98ced36223ae1b05e7dbb"
     end
     on_intel do
-      url "https://github.com/gitkb/atc/releases/download/v0.1.7/atc-linux-x64.tar.gz"
-      sha256 "bf34edcc6f2a73a8c8ba027dfa861cfcbfaa80e71e703f5c5faab79c2c7e0c86"
+      url "https://github.com/gitkb/atc/releases/download/v0.1.8/atc-linux-x64.tar.gz"
+      sha256 "72e42d76f0740f1707aa470d1f1e0d2b2636bc8a40a24326fc34837242b43ced"
     end
   end
 
