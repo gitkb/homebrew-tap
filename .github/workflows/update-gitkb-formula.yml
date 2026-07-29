@@ -13,9 +13,13 @@ on:
           - stable
           - alpha
       tag:
-        description: GitKB release tag, for example v0.1.56-alpha.123.abcdef0
+        description: GitKB release tag, for example v0.2.15-alpha.123.1.abcdef0
         required: true
         type: string
+
+concurrency:
+  group: update-gitkb-formula
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -27,32 +31,43 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Extract update info
         id: info
+        env:
+          INPUT_CHANNEL: ${{ inputs.channel }}
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
 
-          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            CHANNEL="${{ github.event.client_payload.channel }}"
-            TAG="${{ github.event.client_payload.tag }}"
+          if [ "$GITHUB_EVENT_NAME" = "repository_dispatch" ]; then
+            CHANNEL="$(jq -r '.client_payload.channel // ""' "$GITHUB_EVENT_PATH")"
+            TAG="$(jq -r '.client_payload.tag // ""' "$GITHUB_EVENT_PATH")"
           else
-            CHANNEL="${{ github.event.inputs.channel }}"
-            TAG="${{ github.event.inputs.tag }}"
+            CHANNEL="$INPUT_CHANNEL"
+            TAG="$INPUT_TAG"
           fi
 
           case "$CHANNEL" in
-            stable|alpha) ;;
+            stable)
+              if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                echo "::error::Stable updates require a vMAJOR.MINOR.PATCH tag"
+                exit 1
+              fi
+              ;;
+            alpha)
+              if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-alpha\.[0-9]+\.[0-9]+\.[0-9a-f]{7,40}$ ]]; then
+                echo "::error::Alpha updates require a vMAJOR.MINOR.PATCH-alpha.RUN.ATTEMPT.SHA tag"
+                exit 1
+              fi
+              ;;
             *)
               echo "::error::Unsupported channel: $CHANNEL"
               exit 1
               ;;
           esac
-
-          if [ -z "$TAG" ]; then
-            echo "::error::Missing tag"
-            exit 1
-          fi
 
           VERSION="${TAG#v}"
           BRANCH="update-gitkb-${CHANNEL}-${VERSION}"
@@ -76,6 +91,35 @@ jobs:
             echo "commit=$COMMIT"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Verify release channel
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHANNEL: ${{ steps.info.outputs.channel }}
+          TAG: ${{ steps.info.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          release="$(
+            gh release view "$TAG" \
+              --repo gitkb/gitkb-releases \
+              --json isDraft,isPrerelease,tagName
+          )"
+          if [ "$(jq -r '.tagName' <<<"$release")" != "$TAG" ]; then
+            echo "::error::Release tag did not match requested tag"
+            exit 1
+          fi
+          if [ "$(jq -r '.isDraft' <<<"$release")" != "false" ]; then
+            echo "::error::Refusing to publish a formula for a draft release"
+            exit 1
+          fi
+
+          prerelease="$(jq -r '.isPrerelease' <<<"$release")"
+          if { [ "$CHANNEL" = "stable" ] && [ "$prerelease" != "false" ]; } ||
+             { [ "$CHANNEL" = "alpha" ] && [ "$prerelease" != "true" ]; }; then
+            echo "::error::Release prerelease state does not match channel $CHANNEL"
+            exit 1
+          fi
+
       - name: Download release checksums
         env:
           GH_TOKEN: ${{ github.token }}
@@ -93,32 +137,40 @@ jobs:
           CHECKSUM_DIR: checksums
         run: scripts/update-gitkb-formula.sh
 
+      - name: Validate formula
+        env:
+          FORMULA: ${{ steps.info.outputs.formula }}
+        run: ruby -c "$FORMULA"
+
       - name: Open update PR
         env:
           GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.info.outputs.branch }}
+          COMMIT: ${{ steps.info.outputs.commit }}
+          FORMULA: ${{ steps.info.outputs.formula }}
+          TAG: ${{ steps.info.outputs.tag }}
+          TITLE: ${{ steps.info.outputs.title }}
         run: |
           set -euo pipefail
-
-          BRANCH="${{ steps.info.outputs.branch }}"
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           git checkout -B "$BRANCH"
-          git add "${{ steps.info.outputs.formula }}"
+          git add "$FORMULA"
 
           if git diff --cached --quiet; then
             echo "Formula unchanged; skipping PR."
             exit 0
           fi
 
-          git commit -m "${{ steps.info.outputs.commit }}"
-          git push -f -u origin "$BRANCH"
+          git commit -m "$COMMIT"
+          git push --force-with-lease -u origin "$BRANCH"
 
           if ! gh pr view "$BRANCH" --repo gitkb/homebrew-tap &>/dev/null; then
             gh pr create \
-              --title "${{ steps.info.outputs.title }}" \
-              --body "Automated formula update from gitkb-releases ${{ steps.info.outputs.tag }}." \
+              --title "$TITLE" \
+              --body "Automated formula update from gitkb-releases $TAG." \
               --base main \
               --head "$BRANCH" \
               --repo gitkb/homebrew-tap

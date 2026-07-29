@@ -1,0 +1,23 @@
+name: Test Formula Generator
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Generate stable and alpha formulae
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate shell syntax
+        run: bash -n scripts/update-gitkb-formula.sh scripts/test-update-gitkb-formula.sh
+
+      - name: Run generator tests
+        run: scripts/test-update-gitkb-formula.sh

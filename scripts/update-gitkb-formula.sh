@@ -7,14 +7,27 @@ REPO="${REPO:-gitkb/gitkb-releases}"
 CHECKSUM_DIR="${CHECKSUM_DIR:-checksums}"
 FORMULA_DIR="${FORMULA_DIR:-Formula}"
 
+if [[ ! "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+  echo "invalid REPO: ${REPO}" >&2
+  exit 1
+fi
+
 case "$CHANNEL" in
   stable)
+    if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+      echo "invalid stable VERSION: ${VERSION} (expected MAJOR.MINOR.PATCH)" >&2
+      exit 1
+    fi
     formula_file="${FORMULA_DIR}/gitkb.rb"
     class_name="Gitkb"
     desc="Git-native knowledge base with AI-powered code intelligence"
     conflicts=""
     ;;
   alpha)
+    if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-alpha\.[0-9]+\.[0-9]+\.[0-9a-f]{7,40}$ ]]; then
+      echo "invalid alpha VERSION: ${VERSION} (expected MAJOR.MINOR.PATCH-alpha.RUN.ATTEMPT.SHA)" >&2
+      exit 1
+    fi
     formula_file="${FORMULA_DIR}/gitkb-alpha.rb"
     class_name="GitkbAlpha"
     desc="Pre-release GitKB CLI"
@@ -29,7 +42,20 @@ esac
 
 read_checksum() {
   local file="$1"
-  awk '{print $1}' "${CHECKSUM_DIR}/${file}.sha256"
+  local path="${CHECKSUM_DIR}/${file}.sha256"
+  local checksum
+
+  if [ ! -f "$path" ]; then
+    echo "missing checksum file: ${path}" >&2
+    exit 1
+  fi
+
+  checksum="$(awk 'NF { print $1; exit }' "$path")"
+  if [[ ! "$checksum" =~ ^[0-9a-fA-F]{64}$ ]]; then
+    echo "invalid sha256 in ${path}" >&2
+    exit 1
+  fi
+  printf '%s\n' "$checksum"
 }
 
 darwin_arm64="$(read_checksum gitkb-darwin-arm64.tar.gz)"
