@@ -14,7 +14,9 @@ jobs:
     name: Generate stable and alpha formulae
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
 
       - name: Validate shell syntax
         run: bash -n scripts/update-gitkb-formula.sh scripts/test-update-gitkb-formula.sh

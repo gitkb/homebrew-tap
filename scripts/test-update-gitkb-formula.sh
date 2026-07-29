@@ -69,3 +69,17 @@ then
   echo "generator accepted a malformed checksum" >&2
   exit 1
 fi
+
+printf '%s  %s\n' \
+  "$checksum" \
+  "gitkb-linux-arm64.tar.gz" \
+  > "${CHECKSUM_DIR}/gitkb-linux-x64.tar.gz.sha256"
+if CHANNEL=stable \
+  VERSION=1.2.3 \
+  CHECKSUM_DIR="$CHECKSUM_DIR" \
+  FORMULA_DIR="${TEST_ROOT}/mismatched-checksum" \
+  "$GENERATOR"
+then
+  echo "generator accepted a checksum for the wrong artifact" >&2
+  exit 1
+fi

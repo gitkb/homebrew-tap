@@ -43,16 +43,19 @@ esac
 read_checksum() {
   local file="$1"
   local path="${CHECKSUM_DIR}/${file}.sha256"
-  local checksum
+  local checksum artifact extra line
 
   if [ ! -f "$path" ]; then
     echo "missing checksum file: ${path}" >&2
     exit 1
   fi
 
-  checksum="$(awk 'NF { print $1; exit }' "$path")"
-  if [[ ! "$checksum" =~ ^[0-9a-fA-F]{64}$ ]]; then
-    echo "invalid sha256 in ${path}" >&2
+  line="$(awk 'NF { print; exit }' "$path")"
+  read -r checksum artifact extra <<<"$line"
+  artifact="${artifact#\*}"
+  if [[ ! "$checksum" =~ ^[0-9a-fA-F]{64}$ ]] ||
+     [[ "$artifact" != "$file" ]] || [[ -n "$extra" ]]; then
+    echo "invalid checksum entry in ${path}; expected SHA256 for ${file}" >&2
     exit 1
   fi
   printf '%s\n' "$checksum"
