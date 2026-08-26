@@ -1,0 +1,185 @@
+name: Update GitKB Formula
+
+on:
+  repository_dispatch:
+    types: [gitkb-formula-update]
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Formula channel to update
+        required: true
+        type: choice
+        options:
+          - stable
+          - alpha
+      tag:
+        description: GitKB release tag, for example v0.2.15-alpha.123.1.abcdef0
+        required: true
+        type: string
+
+concurrency:
+  group: update-gitkb-formula
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    name: Update formula
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          ref: main
+
+      - name: Extract update info
+        id: info
+        env:
+          INPUT_CHANNEL: ${{ inputs.channel }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+
+          if [ "$GITHUB_EVENT_NAME" = "repository_dispatch" ]; then
+            CHANNEL="$(jq -r '.client_payload.channel // ""' "$GITHUB_EVENT_PATH")"
+            TAG="$(jq -r '.client_payload.tag // ""' "$GITHUB_EVENT_PATH")"
+          else
+            CHANNEL="$INPUT_CHANNEL"
+            TAG="$INPUT_TAG"
+          fi
+
+          case "$CHANNEL" in
+            stable)
+              if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                echo "::error::Stable updates require a vMAJOR.MINOR.PATCH tag"
+                exit 1
+              fi
+              ;;
+            alpha)
+              if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-alpha\.[0-9]+\.[0-9]+\.[0-9a-f]{7,40}$ ]]; then
+                echo "::error::Alpha updates require a vMAJOR.MINOR.PATCH-alpha.RUN.ATTEMPT.SHA tag"
+                exit 1
+              fi
+              ;;
+            *)
+              echo "::error::Unsupported channel: $CHANNEL"
+              exit 1
+              ;;
+          esac
+
+          VERSION="${TAG#v}"
+          BRANCH="update-gitkb-${CHANNEL}-${VERSION}"
+          if [ "$CHANNEL" = "stable" ]; then
+            FORMULA="Formula/gitkb.rb"
+            TITLE="Update gitkb to v${VERSION}"
+            COMMIT="Update gitkb to v${VERSION}"
+          else
+            FORMULA="Formula/gitkb-alpha.rb"
+            TITLE="Update gitkb-alpha to v${VERSION}"
+            COMMIT="Update gitkb-alpha to v${VERSION}"
+          fi
+
+          {
+            echo "channel=$CHANNEL"
+            echo "tag=$TAG"
+            echo "version=$VERSION"
+            echo "branch=$BRANCH"
+            echo "formula=$FORMULA"
+            echo "title=$TITLE"
+            echo "commit=$COMMIT"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Verify release channel
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHANNEL: ${{ steps.info.outputs.channel }}
+          TAG: ${{ steps.info.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          release="$(
+            gh release view "$TAG" \
+              --repo gitkb/gitkb-releases \
+              --json isDraft,isPrerelease,tagName
+          )"
+          if [ "$(jq -r '.tagName' <<<"$release")" != "$TAG" ]; then
+            echo "::error::Release tag did not match requested tag"
+            exit 1
+          fi
+          if [ "$(jq -r '.isDraft' <<<"$release")" != "false" ]; then
+            echo "::error::Refusing to publish a formula for a draft release"
+            exit 1
+          fi
+
+          prerelease="$(jq -r '.isPrerelease' <<<"$release")"
+          if { [ "$CHANNEL" = "stable" ] && [ "$prerelease" != "false" ]; } ||
+             { [ "$CHANNEL" = "alpha" ] && [ "$prerelease" != "true" ]; }; then
+            echo "::error::Release prerelease state does not match channel $CHANNEL"
+            exit 1
+          fi
+
+      - name: Download release checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p checksums
+          gh release download "${{ steps.info.outputs.tag }}" \
+            --repo gitkb/gitkb-releases \
+            --pattern "*.sha256" \
+            --dir checksums
+
+      - name: Update formula
+        env:
+          CHANNEL: ${{ steps.info.outputs.channel }}
+          VERSION: ${{ steps.info.outputs.version }}
+          CHECKSUM_DIR: checksums
+        run: scripts/update-gitkb-formula.sh
+
+      - name: Validate formula
+        env:
+          FORMULA: ${{ steps.info.outputs.formula }}
+        run: ruby -c "$FORMULA"
+
+      - name: Open update PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.info.outputs.branch }}
+          COMMIT: ${{ steps.info.outputs.commit }}
+          FORMULA: ${{ steps.info.outputs.formula }}
+          TAG: ${{ steps.info.outputs.tag }}
+          TITLE: ${{ steps.info.outputs.title }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null; then
+            git fetch origin "refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}"
+          fi
+          git checkout -B "$BRANCH"
+          git add "$FORMULA"
+
+          if git diff --cached --quiet; then
+            echo "Formula unchanged; skipping PR."
+            exit 0
+          fi
+
+          git commit -m "$COMMIT"
+          git push --force-with-lease -u origin "$BRANCH"
+
+          if ! gh pr view "$BRANCH" --repo gitkb/homebrew-tap &>/dev/null; then
+            gh pr create \
+              --title "$TITLE" \
+              --body "Automated formula update from gitkb-releases $TAG." \
+              --base main \
+              --head "$BRANCH" \
+              --repo gitkb/homebrew-tap
+          fi
+
+          gh pr merge "$BRANCH" \
+            --auto \
+            --squash \
+            --repo gitkb/homebrew-tap || echo "Auto-merge setup failed (may require approvals)"
