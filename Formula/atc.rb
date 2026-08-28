@@ -7,22 +7,22 @@ class Atc < Formula
   on_macos do
     on_arm do
       url "https://github.com/gitkb/atc/releases/download/v0.1.14/atc-darwin-arm64.tar.gz"
-      sha256 "4ec4479acbc6af3867e2227cfbbbbf54f73df7c07b747014c07e69acf5be75fc"
+      sha256 "90603009fcf4f02c3d4d23af17cc922fd309f037572b9f4d866f76f8a44514ad"
     end
     on_intel do
       url "https://github.com/gitkb/atc/releases/download/v0.1.14/atc-darwin-x64.tar.gz"
-      sha256 "e6cf634ea97559167f83d1b4af78325401f5b721b9f7543bca6ffdf36db5abc1"
+      sha256 "e94f73e149e7c60813b304649182bb3a9e5b3c0274262c0052bc8205ef8864d0"
     end
   end
 
   on_linux do
     on_arm do
       url "https://github.com/gitkb/atc/releases/download/v0.1.14/atc-linux-arm64.tar.gz"
-      sha256 "617268cc2af35446ac6e5a1f1a326b8eaae5822a382d46937468a585f41db715"
+      sha256 "995897dfe717e7df18ddee9dd6a3b878c1713cd3db50f1c875553cb4f7b53d62"
     end
     on_intel do
       url "https://github.com/gitkb/atc/releases/download/v0.1.14/atc-linux-x64.tar.gz"
-      sha256 "bc950f055ad9c51e16cd6149fe200a1cf8c63ddeda256e5757e54b562029886c"
+      sha256 "7331268ebbb4474a4656500ddfa2070f6d322b2263c15d50cb6ab8eba4caf71f"
     end
   end
 
