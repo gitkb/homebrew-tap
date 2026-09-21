@@ -1,0 +1,128 @@
+name: formula-test
+
+on:
+  pull_request:
+    paths:
+      - 'Formula/*.rb'
+
+# A formula bump must prove the binary it points at actually runs before the
+# PR is allowed to auto-merge. Without a required check here, auto-merge has
+# nothing to wait on and lands the PR immediately.
+concurrency:
+  group: formula-test-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: install and run --version
+    runs-on: macos-latest
+    defaults:
+      run:
+        # Every step runs inside the tap checkout.
+        working-directory: homebrew-tap
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # actions/checkout resolves a PR to the *merge* ref with depth 1, so
+          # neither the base nor the head commit is present in the object
+          # store. Full history makes both resolvable for the diff below.
+          fetch-depth: 0
+          # Check out into Homebrew's tap directory. Homebrew refuses to
+          # install a formula from a bare file path ("requires formulae to be
+          # in a tap"), so the PR's checkout has to *be* the tap. This also
+          # tests the same path a user hits: `brew install gitkb/tap/<name>`.
+          path: homebrew-tap
+
+      - name: Identify changed formulae
+        id: changed
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          # Fail loudly if either commit is missing rather than letting an
+          # errored `git diff` return empty output, which previously looked
+          # identical to "no formula changed" and hid the real cause.
+          for sha in "$BASE_SHA" "$HEAD_SHA"; do
+            if ! git cat-file -e "${sha}^{commit}" 2>/dev/null; then
+              echo "::error::commit $sha not present in the checkout" >&2
+              exit 1
+            fi
+          done
+
+          # Compute the diff outside the heredoc so a git failure aborts the
+          # step under `set -e` instead of being swallowed by $(...).
+          changed="$(git diff --name-only --diff-filter=ACMR "$BASE_SHA" "$HEAD_SHA" -- 'Formula/*.rb')"
+          # Added/Copied/Modified/Renamed only: a deleted formula has nothing
+          # left to install, and treating it as changed would fail the job.
+          # Built with a plain loop, not `mapfile`: GitHub's macOS runners
+          # resolve `bash` to the system 3.2, which has no such builtin.
+          files=""
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            files="${files:+$files }$f"
+          done <<EOF
+          $changed
+          EOF
+          # Unreachable under the `paths:` filter above, which only fires
+          # this workflow when a Formula/*.rb file changed. If it does fire
+          # with nothing to test, that is a surprising state and failing is
+          # safer than reporting a green check that tested nothing.
+          if [ -z "$files" ]; then
+            echo "::error::workflow triggered but no formula changes found" >&2
+            exit 1
+          fi
+          echo "Changed formulae: $files" >&2
+          echo "files=$files" >> "$GITHUB_OUTPUT"
+
+      - name: Install and smoke-test each changed formula
+        env:
+          FILES: ${{ steps.changed.outputs.files }}
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+          HOMEBREW_NO_ANALYTICS: '1'
+          HOMEBREW_NO_INSTALL_FROM_API: '1'
+        run: |
+          set -euo pipefail
+          # Link this checkout in as the real tap so Homebrew resolves
+          # gitkb/tap/<formula> to the PR's files, not the published tap.
+          tap_dir="$(brew --repository)/Library/Taps/gitkb/homebrew-tap"
+          mkdir -p "$(dirname "$tap_dir")"
+          rm -rf "$tap_dir"
+          ln -s "$PWD" "$tap_dir"
+          brew tap | grep -q '^gitkb/tap$' || { echo "::error::tap not registered" >&2; brew tap; exit 1; }
+
+          for file in $FILES; do
+            name="$(basename "$file" .rb)"
+            echo "::group::$name"
+
+            # Install by tap-qualified name so the PR's formula is what runs.
+            brew install --formula --verbose "gitkb/tap/$name"
+
+            # The formula's own `test do` block.
+            brew test "gitkb/tap/$name"
+
+            # Derive the executable from the formula's own `bin.install`
+            # lines rather than assuming it matches the formula name: the
+            # gitkb formula installs `git-kb`, and meta-cli installs `meta`.
+            bin="$(sed -n 's/.*bin\.install "\([^"]*\)".*/\1/p' "$file" | head -1)"
+            if [ -z "$bin" ]; then
+              echo "::error::could not determine executable from $file" >&2
+              exit 1
+            fi
+
+            echo "Running: $bin --version"
+            "$(brew --prefix)/bin/$bin" --version
+
+            # A binary that prints nothing is not a working binary.
+            out="$("$(brew --prefix)/bin/$bin" --version)"
+            if [ -z "${out//[[:space:]]/}" ]; then
+              echo "::error::$bin --version produced no output" >&2
+              exit 1
+            fi
+            echo "$bin --version => $out"
+
+            brew uninstall --formula --ignore-dependencies "gitkb/tap/$name"
+            echo "::endgroup::"
+          done
