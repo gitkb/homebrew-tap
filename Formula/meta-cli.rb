@@ -41,3 +41,4 @@ class MetaCli < Formula
     system "#{bin}/meta", "--version"
   end
 end
+
