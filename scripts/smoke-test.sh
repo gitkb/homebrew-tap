@@ -36,12 +36,10 @@ src="$1"
 shift
 
 export HOMEBREW_NO_ANALYTICS=1 HOMEBREW_NO_INSTALL_CLEANUP=1
-# The homebrew/brew image ships the Homebrew of its build date; a user's
-# first `brew` command updates it. Test the current one (GitHub keeps its
-# macOS runners' Homebrew current), then hold it there for the run.
-if [ "$(uname -s)" = Linux ]; then
-    brew update --quiet
-fi
+# Runners and the homebrew/brew image ship whatever Homebrew they were built
+# with (the image: 4.6.20; the Intel macOS runner: 6.0.18), while a user's
+# first `brew` command updates it. Test the current one, then hold it there.
+brew update --quiet
 export HOMEBREW_NO_AUTO_UPDATE=1
 echo "Testing with $(brew --version | head -1) on $(uname -sm)"
 # Unpacked archives go in Homebrew's own cache, not the system temp dir.

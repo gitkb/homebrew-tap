@@ -106,8 +106,8 @@ jobs:
       # a binary that needs a newer glibc or a library the formula doesn't
       # provide fails here. A stock runner has both and would hide it.
       # Unpinned on purpose: the image follows Homebrew's own Linux floor.
-      # The image's Homebrew is as old as the image; the script updates it to
-      # the current release first, as a user's first `brew` command does.
+      # The image's Homebrew is as old as the image; the script updates it
+      # (on every lane) to the current release, as a user's first `brew` does.
       - name: Install and smoke-test (Homebrew on Linux)
         if: runner.os == 'Linux'
         env:
