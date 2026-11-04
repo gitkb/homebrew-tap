@@ -6,7 +6,7 @@
 # host: the formula's own `test do` block passes, every executable in the
 # release archive is installed into Homebrew's bin, each of them can be loaded
 # here (on Linux: every shared library and glibc symbol version it needs is
-# present), and the formula's first `bin.install` prints a non-empty
+# present; on macOS only that it is installed), and the formula's first `bin.install` prints a non-empty
 # `--version`.
 #
 # CI runs it natively on macOS and inside the `homebrew/brew` image on Linux,
@@ -20,7 +20,8 @@ src="$1"
 shift
 
 export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ANALYTICS=1 HOMEBREW_NO_INSTALL_CLEANUP=1
-prefix="$(brew --prefix)"
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
 
 # Homebrew only installs formulae from a tap, so the checkout is copied in as
 # gitkb/tap and the formulae under test are the ones in this tree. A copy, not
@@ -35,24 +36,31 @@ brew tap | grep -qx 'gitkb/tap' || { echo "::error::tap not registered" >&2; bre
 # inside a function called from `||`, and every formula should be reported,
 # not just the first failure.
 smoke() {
-    local file="$1" name archive unpacked exe base installed missing bin out shipped=0
+    local file="$1" name keg archive unpacked exe base installed missing bin out shipped=0
     name="$(basename "$file" .rb)"
 
     brew install --formula --verbose "gitkb/tap/$name" || return 1
     brew test "gitkb/tap/$name" || return 1
+    # This formula's own bin, so a same-named file from another formula
+    # doesn't count.
+    keg="$(brew --prefix "gitkb/tap/$name")" || return 1
 
     # Every executable the release ships must be installed, so a worker the
     # formula forgets fails here rather than at `atc run`. `._*` entries are
     # macOS AppleDouble metadata that some archives carry, not programs.
     archive="$(brew --cache --formula "gitkb/tap/$name")" || return 1
-    unpacked="$(mktemp -d)" || return 1
-    tar xzf "$archive" -C "$unpacked" 2>/dev/null || return 1
+    unpacked="$work/$name"
+    mkdir -p "$unpacked"
+    if ! tar xzf "$archive" -C "$unpacked" 2>/dev/null; then
+        echo "::error::$name: cannot unpack $archive as a .tar.gz" >&2
+        return 1
+    fi
     for exe in "$unpacked"/*; do
         base="$(basename "$exe")"
         case "$base" in ._*) continue ;; esac
         [ -f "$exe" ] && [ -x "$exe" ] || continue
         shipped=$((shipped + 1))
-        installed="$prefix/bin/$base"
+        installed="$keg/bin/$base"
         if [ ! -x "$installed" ]; then
             echo "::error::$name: the release archive ships $base but the formula does not install it" >&2
             return 1
@@ -65,10 +73,11 @@ smoke() {
                 echo "::error::$name: $base cannot load on this Linux: $missing" >&2
                 return 1
             fi
+            echo "$name: $base installed and loadable"
+        else
+            echo "$name: $base installed"
         fi
-        echo "$name: $base installed and loadable"
     done
-    rm -rf "$unpacked"
     if [ "$shipped" -eq 0 ]; then
         echo "::error::$name: no executables found in $archive" >&2
         return 1
@@ -81,7 +90,7 @@ smoke() {
         echo "::error::$name: could not determine the main executable from $file" >&2
         return 1
     fi
-    out="$("$prefix/bin/$bin" --version)" || return 1
+    out="$("$keg/bin/$bin" --version)" || return 1
     if [ -z "${out//[[:space:]]/}" ]; then
         echo "::error::$name: $bin --version printed nothing" >&2
         return 1

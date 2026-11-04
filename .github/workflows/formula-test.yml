@@ -10,7 +10,7 @@ on:
   pull_request:
 
 concurrency:
-  group: formula-test-${{ github.head_ref }}
+  group: formula-test-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
@@ -26,6 +26,7 @@ jobs:
           # neither the base nor the head commit is present in the object
           # store. Full history makes both resolvable for the diff below.
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Identify changed formulae
         id: changed
@@ -47,7 +48,9 @@ jobs:
 
           # Assigned on its own line so a git failure aborts the step under
           # `set -e` instead of being swallowed.
-          changed="$(git diff --name-only --diff-filter=ACMR "$BASE_SHA" "$HEAD_SHA")"
+          # Three dots: only what the PR changed since it branched, not
+          # what main changed since.
+          changed="$(git diff --name-only --diff-filter=ACMR "$BASE_SHA...$HEAD_SHA")"
           # A change to the test itself re-tests every formula. Otherwise
           # only Added/Copied/Modified/Renamed formulae: a deleted formula
           # has nothing left to install.
@@ -69,10 +72,16 @@ jobs:
       matrix:
         # The tap's support contract: every OS/architecture pair the
         # formulae have a url/sha256 for, on its native runner.
+        # macos-15-intel is GitHub's last Intel image; when it retires, the
+        # x86_64 macOS lane goes with it unless another Intel runner exists.
         os: [macos-latest, macos-15-intel, ubuntu-latest, ubuntu-24.04-arm]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The formulae's Ruby runs during `brew install`; keep the token out
+          # of the copied tap.
+          persist-credentials: false
 
       - name: Install and smoke-test (macOS)
         if: runner.os == 'macOS'
@@ -85,6 +94,7 @@ jobs:
       # Homebrew's own image: a minimal Ubuntu at Homebrew's glibc floor, so
       # a binary that needs a newer glibc or a library the formula doesn't
       # provide fails here. A stock runner has both and would hide it.
+      # Unpinned on purpose: the image follows Homebrew's own Linux floor.
       - name: Install and smoke-test (Homebrew on Linux)
         if: runner.os == 'Linux'
         env:
@@ -94,7 +104,9 @@ jobs:
           docker run --rm -v "$PWD:/src:ro" homebrew/brew /src/scripts/smoke-test.sh /src $FILES
 
   # The one check to require: a matrix job reports one check per OS, and a
-  # skipped job (no formula changed) must still count as passing.
+  # skipped job (no formula changed) must still count as passing. `always()`,
+  # not `!cancelled()`: a skipped required check counts as passing, so a
+  # cancelled run must report red, not skip.
   formula-test:
     needs: [changed, smoke]
     if: always()
