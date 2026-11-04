@@ -38,8 +38,10 @@ shift
 export HOMEBREW_NO_ANALYTICS=1 HOMEBREW_NO_INSTALL_CLEANUP=1
 # Runners and the homebrew/brew image ship whatever Homebrew they were built
 # with (the image: 4.6.20; the Intel macOS runner: 6.0.18), while a user's
-# first `brew` command updates it. Test the current one, then hold it there.
-brew update --quiet
+# first `brew` command updates it to the latest tagged release. Test that
+# one (a runner may be set up to follow Homebrew's development branch
+# instead), then hold it there.
+HOMEBREW_UPDATE_TO_TAG=1 brew update --quiet
 export HOMEBREW_NO_AUTO_UPDATE=1
 echo "Testing with $(brew --version | head -1) on $(uname -sm)"
 # Unpacked archives go in Homebrew's own cache, not the system temp dir.
