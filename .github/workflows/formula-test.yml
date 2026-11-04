@@ -54,7 +54,7 @@ jobs:
           # A change to the test itself re-tests every formula. Otherwise
           # only Added/Copied/Modified/Renamed formulae: a deleted formula
           # has nothing left to install.
-          if grep -qxE '\.github/workflows/formula-test\.yml|scripts/smoke-test\.sh' <<<"$changed"; then
+          if grep -qxE '\.github/workflows/formula-test\.yml|scripts/[^/]+\.sh' <<<"$changed"; then
             files="$(ls Formula/*.rb)"
           else
             files="$(grep -xE 'Formula/[^/]+\.rb' <<<"$changed" || true)"
@@ -62,6 +62,11 @@ jobs:
           files="$(tr '\n' ' ' <<<"$files" | xargs)"
           echo "Formulae to test: ${files:-none}" >&2
           echo "files=$files" >> "$GITHUB_OUTPUT"
+
+      # The script deletes gitkb/tap and uninstalls formulae; being in CI or
+      # a container must not be enough to let it.
+      - name: smoke-test.sh refuses without the throwaway opt-in
+        run: scripts/test-smoke-guard.sh
 
   smoke:
     name: install and run (${{ matrix.os }})
@@ -76,6 +81,12 @@ jobs:
         # x86_64 macOS lane goes with it unless another Intel runner exists.
         os: [macos-latest, macos-15-intel, ubuntu-latest, ubuntu-24.04-arm]
     runs-on: ${{ matrix.os }}
+    # A hanging `--version` fails the lane instead of holding it for hours.
+    timeout-minutes: 20
+    # Every runner, and the container started on it, is thrown away after the
+    # job, so its Homebrew may be replaced.
+    env:
+      SMOKE_TEST_THROWAWAY_HOMEBREW: '1'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -95,13 +106,15 @@ jobs:
       # a binary that needs a newer glibc or a library the formula doesn't
       # provide fails here. A stock runner has both and would hide it.
       # Unpinned on purpose: the image follows Homebrew's own Linux floor.
+      # The image's Homebrew is as old as the image; the script updates it to
+      # the current release first, as a user's first `brew` command does.
       - name: Install and smoke-test (Homebrew on Linux)
         if: runner.os == 'Linux'
         env:
           FILES: ${{ needs.changed.outputs.files }}
         run: |
           # shellcheck disable=SC2086 # FILES: space-separated, word-split on purpose
-          docker run --rm -v "$PWD:/src:ro" homebrew/brew /src/scripts/smoke-test.sh /src $FILES
+          docker run --rm -e SMOKE_TEST_THROWAWAY_HOMEBREW -v "$PWD:/src:ro" homebrew/brew /src/scripts/smoke-test.sh /src $FILES
 
   # The one check to require: a matrix job reports one check per OS, and a
   # skipped job (no formula changed) must still count as passing. `always()`,
