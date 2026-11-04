@@ -4,23 +4,37 @@
 # Installs each formula from the tap checkout at TAP_DIR the way a user does
 # (`brew install gitkb/tap/<name>`) and checks that what landed works on this
 # host: the formula's own `test do` block passes, every executable in the
-# release archive is installed into Homebrew's bin, each of them can be loaded
-# here (on Linux: every shared library and glibc symbol version it needs is
-# present; on macOS only that it is installed), and the formula's first `bin.install` prints a non-empty
-# `--version`.
+# release archive is installed into the formula's bin, each of them can be
+# loaded here (on Linux: every shared library and glibc symbol version it
+# needs is present; on macOS only that it is installed), and the formula's
+# first `bin.install` prints a non-empty `--version`.
 #
 # CI runs it natively on macOS and inside the `homebrew/brew` image on Linux,
 # the minimal Ubuntu with Homebrew's glibc floor, so a release built against a
 # newer glibc or an undeclared system library fails here and not for a user.
+# It replaces the installed gitkb/tap and uninstalls what it tests, so it
+# refuses to run anywhere but CI or a container.
 #
 # Runs under macOS's system bash 3.2: no `mapfile`, no associative arrays.
 set -euo pipefail
 
+if [ $# -lt 2 ]; then
+    echo "usage: $0 TAP_DIR FORMULA_FILE..." >&2
+    exit 2
+fi
+if [ -z "${CI:-}" ] && [ ! -f /.dockerenv ]; then
+    echo "smoke-test.sh replaces gitkb/tap and uninstalls formulae; run it in CI or" >&2
+    echo "  docker run --rm -v \"\$PWD:/src:ro\" homebrew/brew /src/scripts/smoke-test.sh /src Formula/<name>.rb" >&2
+    exit 2
+fi
 src="$1"
 shift
 
 export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ANALYTICS=1 HOMEBREW_NO_INSTALL_CLEANUP=1
-work="$(mktemp -d)"
+# Unpacked archives go in Homebrew's own cache, not the system temp dir.
+work="$(brew --cache)/gitkb-smoke-test"
+rm -rf "$work"
+mkdir -p "$work"
 trap 'rm -rf "$work"' EXIT
 
 # Homebrew only installs formulae from a tap, so the checkout is copied in as

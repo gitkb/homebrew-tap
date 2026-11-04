@@ -70,8 +70,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The tap's support contract: every OS/architecture pair the
-        # formulae have a url/sha256 for, on its native runner.
+        # The support contract in README "Platforms", each on its native
+        # runner.
         # macos-15-intel is GitHub's last Intel image; when it retires, the
         # x86_64 macOS lane goes with it unless another Intel runner exists.
         os: [macos-latest, macos-15-intel, ubuntu-latest, ubuntu-24.04-arm]
