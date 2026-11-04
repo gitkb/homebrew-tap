@@ -22,7 +22,7 @@ if [ $# -lt 2 ]; then
     echo "usage: $0 TAP_DIR FORMULA_FILE..." >&2
     exit 2
 fi
-if [ -z "${CI:-}" ] && [ ! -f /.dockerenv ]; then
+if [ -z "${CI:-}" ] && [ ! -f /.dockerenv ] && [ ! -f /run/.containerenv ]; then
     echo "smoke-test.sh replaces gitkb/tap and uninstalls formulae; run it in CI or" >&2
     echo "  docker run --rm -v \"\$PWD:/src:ro\" homebrew/brew /src/scripts/smoke-test.sh /src Formula/<name>.rb" >&2
     exit 2
