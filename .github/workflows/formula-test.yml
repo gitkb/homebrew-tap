@@ -9,6 +9,10 @@ name: formula-test
 on:
   pull_request:
 
+# Read-only token: nothing here writes to the repo.
+permissions:
+  contents: read
+
 concurrency:
   group: formula-test-${{ github.event.pull_request.number }}
   cancel-in-progress: true
@@ -50,14 +54,15 @@ jobs:
           # `set -e` instead of being swallowed.
           # Three dots: only what the PR changed since it branched, not
           # what main changed since.
-          changed="$(git diff --name-only --diff-filter=ACMR "$BASE_SHA...$HEAD_SHA")"
-          # A change to the test itself re-tests every formula. Otherwise
-          # only Added/Copied/Modified/Renamed formulae: a deleted formula
-          # has nothing left to install.
+          changed="$(git diff --name-only "$BASE_SHA...$HEAD_SHA")"
+          kept="$(git diff --name-only --diff-filter=ACMR "$BASE_SHA...$HEAD_SHA")"
+          # A change to the test itself, deletions included, re-tests every
+          # formula. Otherwise only Added/Copied/Modified/Renamed formulae: a
+          # deleted formula has nothing left to install.
           if grep -qxE '\.github/workflows/formula-test\.yml|scripts/[^/]+\.sh' <<<"$changed"; then
             files="$(ls Formula/*.rb)"
           else
-            files="$(grep -xE 'Formula/[^/]+\.rb' <<<"$changed" || true)"
+            files="$(grep -xE 'Formula/[^/]+\.rb' <<<"$kept" || true)"
           fi
           files="$(tr '\n' ' ' <<<"$files" | xargs)"
           echo "Formulae to test: ${files:-none}" >&2
