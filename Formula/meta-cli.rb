@@ -4,37 +4,37 @@
 class MetaCli < Formula
   desc "Multi-repo management CLI with AI integration"
   homepage "https://github.com/gitkb/meta"
-  version "0.2.22"
+  version "0.3.0"
   license "MIT"
 
   on_macos do
     on_arm do
       url "https://github.com/gitkb/meta/releases/download/v#{version}/meta-darwin-arm64.tar.gz"
-      sha256 "18d1d6d75d83e9e05554cbcc40bea156d49867cebc10c558cc3dff35822389ec"
+      sha256 "3a7befd146dcd85b11a1168e3c8d0b9c7bf44592d183556f6c104ca074a8a031"
     end
     on_intel do
       url "https://github.com/gitkb/meta/releases/download/v#{version}/meta-darwin-x64.tar.gz"
-      sha256 "77e3046e66644f69c066a0cd06c2a7c4b555920b0e091acb1614892a77aa3d09"
+      sha256 "591d8706a4b0854714a39778fe4d0ed1eeca9295e6254e23ccd4a1b4bcc3421e"
     end
   end
 
   on_linux do
     on_arm do
       url "https://github.com/gitkb/meta/releases/download/v#{version}/meta-linux-arm64.tar.gz"
-      sha256 "58c40ee62342a0a033f666f3ced3f76af20b7472aca59a4e6414c3da452255b1"
+      sha256 "50d578f9bae3564e0e7f2c195641cd4c337b9d2e9606cb218f586afff7f32338"
     end
     on_intel do
       url "https://github.com/gitkb/meta/releases/download/v#{version}/meta-linux-x64.tar.gz"
-      sha256 "28946046927da46d04d2daac5db1a64da0bec46f65f891fdcb0bf4c9e420d68c"
+      sha256 "320cab1594f9552f02516adb19edc60061ff6f6b347f74e9949a1fb8e1c989e4"
     end
   end
 
   def install
+    bin.install "loop"
     bin.install "meta"
     bin.install "meta-git"
-    bin.install "meta-project"
     bin.install "meta-mcp"
-    bin.install "loop"
+    bin.install "meta-cargo"
   end
 
   test do
