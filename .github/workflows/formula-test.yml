@@ -2,6 +2,7 @@ name: formula-test
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'Formula/*.rb'
 
@@ -15,6 +16,7 @@ concurrency:
 jobs:
   smoke:
     name: install and run --version
+    if: github.event.pull_request.draft != true
     runs-on: macos-latest
     defaults:
       run:
